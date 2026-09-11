@@ -1,0 +1,60 @@
+name: Cosmological Principle
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [cosmological-evolve]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cosmological-principle-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify one-liner size and syntax
+        run: |
+          bytes=$(wc -c < Cosmological_Principle.sh)
+          echo "Cosmological_Principle.sh bytes=$bytes"
+          test "$bytes" -lt 2048
+          bash -n Cosmological_Principle.sh
+          chmod +x Cosmological_Principle.sh
+      - name: Verify self decoding
+        run: |
+          out=$(./Cosmological_Principle.sh self)
+          echo "$out" | python3 -c 'import json,sys;x=json.load(sys.stdin);assert x["SELF_SOLVED"] and x["SELF_LEN"]>0 and x["SELF_INDEX"].startswith("0x")'
+      - name: Verify all one-byte cosmological solutions
+        run: |
+          ./Cosmological_Principle.sh 256 1 > /tmp/cp.jsonl
+          python3 - <<'PY'
+          import json
+          xs=[json.loads(x) for x in open('/tmp/cp.jsonl')]
+          assert len(xs)==256
+          assert {x['BYTE'] for x in xs}==set(range(256))
+          assert len({x['s'] for x in xs})==256
+          assert all(x['K']==1 and x['HOM'] and x['ISO'] and x['CP'] and x['DEFECT']==0 and x['ALL_CP'] for x in xs)
+          PY
+      - name: Verify branch continuation and inverse scale
+        run: |
+          a=$(./Cosmological_Principle.sh 1 1)
+          b=$(./Cosmological_Principle.sh 1 257)
+          python3 -c 'import json,sys;a=json.loads(sys.argv[1]);b=json.loads(sys.argv[2]);assert a["BYTE"]==b["BYTE"]==0 and a["NEXT"]==257 and b["PARENT"]==1 and b["K"]==2 and b["ETA"]<a["ETA"] and a["CP"] and b["CP"]' "$a" "$b"
+      - name: Verify root entropy and paste-and-run independence
+        run: |
+          root=$(./Cosmological_Principle.sh 1 0)
+          echo "$root" | python3 -c 'import json,sys;x=json.load(sys.stdin);assert x["BRANCHES"]==256 and x["INFO_H"]==8 and x["CP"]'
+          cmd=$(cat Cosmological_Principle.sh)
+          cd /tmp
+          out=$(bash -c "$cmd" -- 1 257)
+          echo "$out" | python3 -c 'import json,sys;x=json.load(sys.stdin);assert x["s"]=="0000" and x["CP"] and x["SELF_SOLVED"]'
